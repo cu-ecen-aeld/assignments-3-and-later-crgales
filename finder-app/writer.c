@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <errno.h>
 
 int main(int argc, char *argv[]) {
     FILE *fp;
@@ -14,8 +15,12 @@ int main(int argc, char *argv[]) {
 
     fp = fopen(argv[1], "w");
 
+    if (fp == NULL) {
+        perror("Error creating file");
+        exit(-1);
+    }
+
     fprintf(fp, "%s", argv[2]);
 
     fclose(fp);
-
 }
