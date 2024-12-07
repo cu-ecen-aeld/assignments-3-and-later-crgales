@@ -8,7 +8,7 @@ int main(int argc, char *argv[]) {
     
     if (argc < 3) {
         printf("Usage: %s <FILE> <CONTENTS>", argv[0]);
-        exit(-1);
+        exit(1);
     }
 
     syslog(LOG_USER, "Writing %s to %s", argv[2], argv[1]);
@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
 
     if (fp == NULL) {
         perror("Error creating file");
-        exit(-1);
+        exit(1);
     }
 
     fprintf(fp, "%s", argv[2]);
