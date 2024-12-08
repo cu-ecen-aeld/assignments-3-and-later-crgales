@@ -1,4 +1,8 @@
+#define _GNU_SOURCE
 #include "systemcalls.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -16,8 +20,13 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    printf("\n\ndo_system: Running system command \"%s\"\n\n", cmd);
 
-    return true;
+    int ret = system(cmd);
+
+    if (ret == 0) return true;
+
+    return false;
 }
 
 /**
@@ -40,14 +49,14 @@ bool do_exec(int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
+
+    pid_t pid;
+
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
 
 /*
  * TODO:
@@ -60,6 +69,22 @@ bool do_exec(int count, ...)
 */
 
     va_end(args);
+
+    pid = fork();
+
+    switch (pid) {
+        case -1:
+            perror("fork");
+            return(false);
+        case 0:
+            printf("\n\ndo_exec: Running %s\n\n", command[0]);
+            execvpe(command[0], command, NULL);
+            return(true);
+        default:
+            printf("Child is PID %d\n", pid);
+            while(wait(NULL) > 0);  // Waits for all child processes to exit
+            puts("Parent exiting.");
+    }
 
     return true;
 }
@@ -75,6 +100,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
+
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
