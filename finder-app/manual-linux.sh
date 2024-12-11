@@ -12,7 +12,7 @@ BUSYBOX_VERSION=1_33_1
 FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
 CROSS_COMPILE_DIR=/opt/arm-gnu-toolchain/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-linux-gnu
-CROSS_COMPILE=$CROSS_COMPILE_DIR/bin/aarch64-none-linux-gnu-
+CROSS_COMPILE=aarch64-none-linux-gnu-
 CROSS_COMPILE_ARCH=aarch64-none-linux-gnu
 
 echo "Cross compiler is at $CROSS_COMPILE_DIR"
