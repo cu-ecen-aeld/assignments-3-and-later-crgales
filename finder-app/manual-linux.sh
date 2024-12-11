@@ -11,11 +11,10 @@ KERNEL_VERSION=v5.15.163
 BUSYBOX_VERSION=1_33_1
 FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
-CROSS_COMPILE_DIR=/opt/arm-gnu-toolchain/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-linux-gnu
 CROSS_COMPILE=aarch64-none-linux-gnu-
-CROSS_COMPILE_ARCH=aarch64-none-linux-gnu
 
-echo "Cross compiler is at $CROSS_COMPILE_DIR"
+CROSS_COMPILE_LIBS=$(${CROSS_COMPILE}gcc -print-sysroot)
+echo "Cross compiler libs at $CROSS_COMPILE_LIBS"
 
 if [ $# -lt 1 ]
 then
@@ -77,8 +76,8 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
-cp $CROSS_COMPILE_DIR/$CROSS_COMPILE_ARCH/libc/lib/* lib
-cp $CROSS_COMPILE_DIR/$CROSS_COMPILE_ARCH/libc/lib64/* lib64
+cp $CROSS_COMPILE_LIBS/lib/* lib
+cp $CROSS_COMPILE_LIBS/lib64/* lib64
 
 # TODO: Make device nodes
 sudo mknod -m 666 dev/null c 1 3
