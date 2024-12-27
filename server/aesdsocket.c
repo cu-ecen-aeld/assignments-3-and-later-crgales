@@ -21,13 +21,17 @@ void handle_signal(int signal) {
 
     if (signal == SIGINT || signal == SIGTERM) {
         syslog(LOG_INFO, "Received signal %d", signal);
+        printf("Received signal %d\n", signal);
 
         system("rm -f /var/tmp/aesdsocketdata");
 
-        TAILQ_FOREACH(thread_list_entry, &thread_list_head, threads) {
+        pthread_mutex_destroy(&file_options.file_mutex);
+
+        while (!TAILQ_EMPTY(&thread_list_head)) {
+            thread_list_entry = TAILQ_FIRST(&thread_list_head);
+            TAILQ_REMOVE(&thread_list_head, thread_list_entry, threads);
             pthread_join(thread_list_entry->thread_id, NULL);
             free(thread_list_entry);
-            thread_list_entry = NULL;
         }
 
         exit(0);
@@ -101,12 +105,10 @@ void handle_socket(void *arguments) {
     char buffer[BUFFER_SIZE];  // Allocate a thread-specific buffer
     int valread;
     socket_options_t *socket = (socket_options_t *)arguments;
-    thread_list_t *thread_list_entry;
 
     memset(buffer, 0, BUFFER_SIZE);
     // Reading data from the client
     while ((valread = read(socket->socket_fd, buffer, BUFFER_SIZE)) > 0) {
-        printf("Received: %s\n", buffer);
 
         // Acquire the mutex before accessing the file
         if (pthread_mutex_lock(&file_options.file_mutex)) {
@@ -119,7 +121,6 @@ void handle_socket(void *arguments) {
 
         // Writing data to the file
         write(file_options.file_fd, buffer, strlen(buffer));
-        printf("Wrote to the file: %s\n", buffer);
 
         // Rewind the file pointer to the beginning
         lseek(file_options.file_fd, 0, SEEK_SET);
@@ -129,11 +130,9 @@ void handle_socket(void *arguments) {
         
         // Reading data from the file
         read(file_options.file_fd, buffer, BUFFER_SIZE);
-        printf("Read from the file: %s\n", buffer);
 
         // Sending buffer to the client
         send(socket->socket_fd, buffer, strlen(buffer), 0);
-        printf("\nResponse sent: %s\n", buffer);
 
         // Release the mutex after accessing the file
         if (pthread_mutex_unlock(&file_options.file_mutex)) {
@@ -148,16 +147,12 @@ void handle_socket(void *arguments) {
     printf("Client disconnected\n");
     syslog(LOG_INFO, "Client disconnected");
 
-    // Close the socket and remove the thread from the thread list
+    // Close the socket and free the memory
     close(socket->socket_fd);
-    TAILQ_FOREACH(thread_list_entry, &thread_list_head, threads) {
-        if (thread_list_entry->thread_id == pthread_self()) {
-            TAILQ_REMOVE(&thread_list_head, thread_list_entry, threads);
-            free(thread_list_entry);
-            thread_list_entry = NULL;
-            break;
-        }
-    }
+    free(socket);
+    socket = NULL;
+
+    pthread_exit(NULL);
 }
 
 void aesdsocket_create_socket() {
