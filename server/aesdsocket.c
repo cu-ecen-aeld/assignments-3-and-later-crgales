@@ -7,7 +7,6 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <time.h>
-#include <semaphore.h>
 #include <sys/queue.h>
 #include <pthread.h>
 
@@ -73,9 +72,9 @@ void timestamp() {
     struct tm *timeinfo;
 
     while (1) {
-        // Acquire the semaphore before accessing the file
-        if (sem_wait(&file_options.semaphore) < 0) {
-            perror("sem_wait");
+        // Acquire the mutex before accessing the file
+        if (pthread_mutex_lock(&file_options.file_mutex)) {
+            perror("pthread_mutex_lock");
             exit(EXIT_FAILURE);
         }
 
@@ -88,11 +87,12 @@ void timestamp() {
 
         write(file_options.file_fd, buffer, strlen(buffer));
         
-        // Release the semaphore after accessing the file  
-        if (sem_post(&file_options.semaphore) < 0) {
-            perror("sem_post");
+        // Release the mutex after accessing the file
+        if (pthread_mutex_unlock(&file_options.file_mutex)) {
+            perror("pthread_mutex_unlock");
             exit(EXIT_FAILURE);
         }
+
         sleep(10);
     }
 }
@@ -100,17 +100,17 @@ void timestamp() {
 void handle_socket(void *arguments) {
     char buffer[BUFFER_SIZE];  // Allocate a thread-specific buffer
     int valread;
-    int socket = *((int *)arguments);
+    socket_options_t *socket = (socket_options_t *)arguments;
     thread_list_t *thread_list_entry;
 
     memset(buffer, 0, BUFFER_SIZE);
     // Reading data from the client
-    while ((valread = read(socket, buffer, BUFFER_SIZE)) > 0) {
+    while ((valread = read(socket->socket_fd, buffer, BUFFER_SIZE)) > 0) {
         printf("Received: %s\n", buffer);
 
-        // Acquire the semaphore before accessing the file
-        if (sem_wait(&file_options.semaphore) < 0) {
-            perror("sem_wait");
+        // Acquire the mutex before accessing the file
+        if (pthread_mutex_lock(&file_options.file_mutex)) {
+            perror("pthread_mutex_lock");
             exit(EXIT_FAILURE);
         }
 
@@ -132,12 +132,12 @@ void handle_socket(void *arguments) {
         printf("Read from the file: %s\n", buffer);
 
         // Sending buffer to the client
-        send(socket, buffer, strlen(buffer), 0);
+        send(socket->socket_fd, buffer, strlen(buffer), 0);
         printf("\nResponse sent: %s\n", buffer);
 
-        // Release the semaphore after accessing the file  
-        if (sem_post(&file_options.semaphore) < 0) {
-            perror("sem_post");
+        // Release the mutex after accessing the file
+        if (pthread_mutex_unlock(&file_options.file_mutex)) {
+            perror("pthread_mutex_unlock");
             exit(EXIT_FAILURE);
         }
 
@@ -149,7 +149,7 @@ void handle_socket(void *arguments) {
     syslog(LOG_INFO, "Client disconnected");
 
     // Close the socket and remove the thread from the thread list
-    close(socket);
+    close(socket->socket_fd);
     TAILQ_FOREACH(thread_list_entry, &thread_list_head, threads) {
         if (thread_list_entry->thread_id == pthread_self()) {
             TAILQ_REMOVE(&thread_list_head, thread_list_entry, threads);
@@ -158,11 +158,11 @@ void handle_socket(void *arguments) {
             break;
         }
     }
-
 }
 
 void aesdsocket_create_socket() {
-    int server_fd, new_socket;
+    int server_fd, accept_fd;
+    socket_options_t *new_socket;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
     thread_list_t *thread_list_entry;
@@ -176,7 +176,13 @@ void aesdsocket_create_socket() {
 
     // Forcefully attaching socket to the port 9000
     int opt = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+        perror("setsockopt");
+        close(server_fd);
+        exit(-1);
+    }
+
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt))) {
         perror("setsockopt");
         close(server_fd);
         exit(-1);
@@ -209,16 +215,20 @@ void aesdsocket_create_socket() {
     syslog(LOG_INFO, "Server listening on port %d", PORT);
 
     // Accepting incoming connection
-    while ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) > 0) {
+    while ((accept_fd = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) > 0) {
 
         // Log the accept message to syslog
         syslog(LOG_INFO, "Accepted connection from %s", inet_ntoa(address.sin_addr));
         printf("Accepted connection from %s\n", inet_ntoa(address.sin_addr));
 
+        // Create a new socket_options_t struct to pass to the thread
+        new_socket = malloc(sizeof(socket_options_t));
+        new_socket->socket_fd = accept_fd;
+
         // Create a new thread to handle the socket
-        if (pthread_create(&thread_id, NULL, (void *)handle_socket, (void *)&new_socket) < 0) {
+        if (pthread_create(&thread_id, NULL, (void *)handle_socket, (void *)new_socket) < 0) {
             perror("pthread_create");
-            close(new_socket);
+            close(accept_fd);
             close(server_fd);
             close(file_options.file_fd);
             closelog();
@@ -229,7 +239,7 @@ void aesdsocket_create_socket() {
         thread_list_entry = (thread_list_t *)malloc(sizeof(thread_list_t));
         if (thread_list_entry == NULL) {
             perror("malloc");
-            close(new_socket);
+            close(accept_fd);
             close(server_fd);
             close(file_options.file_fd);
             closelog();
@@ -243,7 +253,7 @@ void aesdsocket_create_socket() {
     perror("accept");
     
     // Closing the socket
-    close(new_socket);
+    close(accept_fd);
     close(server_fd);
     close(file_options.file_fd);
     closelog();
@@ -271,8 +281,11 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    if (sem_init(&file_options.semaphore, 0, 1) < 0) {
-        perror("sem_init");
+    // Initialize the mutex
+    if (pthread_mutex_init(&file_options.file_mutex, NULL) != 0) {
+        perror("pthread_mutex_init");
+        close(file_options.file_fd);
+        closelog();
         exit(EXIT_FAILURE);
     }
 

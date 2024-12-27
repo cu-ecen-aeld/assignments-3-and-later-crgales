@@ -6,8 +6,12 @@ typedef struct {
 } aesdsocket_options_t;
 
 typedef struct {
+    int socket_fd;
+} socket_options_t;
+
+typedef struct {
     int file_fd;
-    sem_t semaphore;
+    pthread_mutex_t file_mutex;
 } file_options_t;
 
 typedef struct thread_list {
