@@ -42,12 +42,12 @@ void setup_signal_handler() {
 
     if (sigaction(SIGINT, &sa, NULL) == -1) {
         perror("sigaction");
-        exit(EXIT_FAILURE);
+        exit(-1);
     }
 
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
         perror("sigaction");
-        exit(EXIT_FAILURE);
+        exit(-1);
     }
 }
 
@@ -61,7 +61,7 @@ void parse_command_line_options(int argc, char *argv[], aesdsocket_options_t *op
                 break;
             default:
                 fprintf(stderr, "Usage: %s [-d]\n", argv[0]);
-                exit(EXIT_FAILURE);
+                exit(-1);
         }
     }
 }
@@ -75,7 +75,7 @@ void timestamp() {
         // Acquire the mutex before accessing the file
         if (pthread_mutex_lock(&file_options.file_mutex)) {
             perror("pthread_mutex_lock");
-            exit(EXIT_FAILURE);
+            exit(-1);
         }
 
         time(&rawtime);
@@ -90,7 +90,7 @@ void timestamp() {
         // Release the mutex after accessing the file
         if (pthread_mutex_unlock(&file_options.file_mutex)) {
             perror("pthread_mutex_unlock");
-            exit(EXIT_FAILURE);
+            exit(-1);
         }
 
         sleep(10);
@@ -111,7 +111,7 @@ void handle_socket(void *arguments) {
         // Acquire the mutex before accessing the file
         if (pthread_mutex_lock(&file_options.file_mutex)) {
             perror("pthread_mutex_lock");
-            exit(EXIT_FAILURE);
+            exit(-1);
         }
 
         // Move the file pointer to the end of the file
@@ -138,7 +138,7 @@ void handle_socket(void *arguments) {
         // Release the mutex after accessing the file
         if (pthread_mutex_unlock(&file_options.file_mutex)) {
             perror("pthread_mutex_unlock");
-            exit(EXIT_FAILURE);
+            exit(-1);
         }
 
         // Clear the buffer for the next iteration
@@ -278,7 +278,7 @@ int main(int argc, char *argv[]) {
     file_options.file_fd = open("/var/tmp/aesdsocketdata", O_RDWR | O_CREAT, 0644);
     if (file_options.file_fd < 0) {
         perror("open failed");
-        exit(EXIT_FAILURE);
+        exit(-1);
     }
 
     // Initialize the mutex
@@ -286,7 +286,7 @@ int main(int argc, char *argv[]) {
         perror("pthread_mutex_init");
         close(file_options.file_fd);
         closelog();
-        exit(EXIT_FAILURE);
+        exit(-1);
     }
 
     // Create a thread to write the timestamp to the file
@@ -294,7 +294,7 @@ int main(int argc, char *argv[]) {
         perror("pthread_create");
         close(file_options.file_fd);
         closelog();
-        exit(EXIT_FAILURE);
+        exit(-1);
     }
     
     // Run sockets in the main thread
