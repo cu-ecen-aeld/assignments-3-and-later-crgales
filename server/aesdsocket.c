@@ -134,6 +134,8 @@ void handle_socket(void *arguments) {
         // Sending buffer to the client
         send(socket->socket_fd, buffer, strlen(buffer), 0);
 
+        printf("Data sent to client: %s\n", buffer);
+
         // Release the mutex after accessing the file
         if (pthread_mutex_unlock(&file_options.file_mutex)) {
             perror("pthread_mutex_unlock");
@@ -199,6 +201,14 @@ void aesdsocket_create_socket() {
         daemon(0, 0);
     }
 
+    // Create a thread to write the timestamp to the file
+    if (pthread_create(&thread_id, NULL, (void *)timestamp, NULL) < 0) {
+        perror("pthread_create");
+        close(file_options.file_fd);
+        closelog();
+        exit(-1);
+    }
+     
     // Listening for incoming connections
     if (listen(server_fd, 3) < 0) {
         perror("listen");
@@ -259,7 +269,6 @@ void aesdsocket_create_socket() {
 }
 
 int main(int argc, char *argv[]) {
-    pthread_t thread_id;
 
     parse_command_line_options(argc, argv, &options);
 
@@ -284,14 +293,6 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
 
-    // Create a thread to write the timestamp to the file
-    if (pthread_create(&thread_id, NULL, (void *)timestamp, NULL) < 0) {
-        perror("pthread_create");
-        close(file_options.file_fd);
-        closelog();
-        exit(-1);
-    }
-    
     // Run sockets in the main thread
     aesdsocket_create_socket(&options);
 
