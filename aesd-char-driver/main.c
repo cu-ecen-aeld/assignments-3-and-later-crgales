@@ -68,6 +68,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     ssize_t buffers_read = 0;
 
     if (mutex_lock_interruptible(&dev->lock)) {
+        PDEBUG("Can't get mutex");
         return -ERESTARTSYS;
     }
 
