@@ -125,6 +125,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     // If there is a new buffer entry, it means that the previous write didn't end in a new line
     // and the buffer entry was not added to the circular buffer, so we need to append the new data
     if (dev->new_entry) {
+        PDEBUG("Appending to previous entry");
         // Allocate memory for the new buffer entry which will contain the previous data and the new data
         tmp_data = kmalloc(dev->new_entry->size + count, GFP_KERNEL);
         if (!tmp_data) {
@@ -150,12 +151,15 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         dev->new_entry->size += count;
         dev->new_entry->buffptr = tmp_data;
     } else {
+        PDEBUG("Creating new entry");
+
         // Allocate memory for the new buffer entry
         dev->new_entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
         if (!dev->new_entry) {
             mutex_unlock(&dev->lock);
             return -ENOMEM;
         }
+
         dev->new_entry->buffptr = kmalloc(count, GFP_KERNEL); // Allocate memory for the buffer
         if (!entry->buffptr) {
             kfree(dev->new_entry);
@@ -163,6 +167,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
             mutex_unlock(&dev->lock);
             return -ENOMEM;
         }
+
+        PDEBUG("Copying data to new entry from user space");
         bytes_not_copied = copy_from_user(dev->new_entry->buffptr, buf, count);
         if (bytes_not_copied) {
             kfree(dev->new_entry->buffptr);
@@ -174,8 +180,11 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         dev->new_entry->size = count;
     }
 
+    PDEBUG("Checking if the last character is a new line");
+
     // We now have a new buffer entry, so we need to add it to the circular buffer if the last character is a new line
     if (dev->new_entry->buffptr[dev->new_entry->size - 1] == '\n') {
+        PDEBUG("Moving new entry to circular buffer");
         aesd_circular_buffer_add_entry(&dev->buffer, dev->new_entry);
         dev->new_entry = NULL;
     }
