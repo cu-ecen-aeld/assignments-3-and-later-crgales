@@ -65,7 +65,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     struct aesd_buffer_entry *entry;
     ssize_t entry_offset = 0;
     ssize_t bytes_copied = 0;
-
+    ssize_t buffers_read = 0;
 
     if (mutex_lock_interruptible(&dev->lock)) {
         return -ERESTARTSYS;
@@ -76,10 +76,13 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         return 0;
     }
 
+    // Find the buffer entry corresponding to the file position
     entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->buffer, *f_pos, &entry_offset);
 
+    // If the entry is NULL, it means that the file position is not available in the buffer
     if (entry) {
-        while (bytes_copied < count) {
+        while (bytes_copied < count) && (buffers_read++ < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) && entry && entry->size) {
+            PDEBUG("read %zu bytes and %zu buffers so far",bytes_copied, buffers_read);
             if (copy_to_user(buf + bytes_copied, entry->buffptr + entry_offset, entry->size - entry_offset)) {
                 mutex_unlock(&dev->lock);
                 return -EFAULT;
@@ -88,10 +91,6 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
             entry_offset = 0;
 
             entry = aesd_circular_buffer_get_next_entry(&dev->buffer, entry);
-            if (!entry) {
-                break;
-            }
-        }
     } else {
         bytes_copied = 0;
     }
