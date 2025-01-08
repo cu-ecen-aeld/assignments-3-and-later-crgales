@@ -82,7 +82,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     // If the entry is NULL, it means that the file position is not available in the buffer
     if (entry) {
         while (bytes_copied < count) && (buffers_read++ < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) && entry && entry->size) {
-            PDEBUG("read %zu bytes and %zu buffers so far",bytes_copied, buffers_read);
+            PDEBUG("So far read %zu bytes and %zu buffers",bytes_copied, buffers_read);
             if (copy_to_user(buf + bytes_copied, entry->buffptr + entry_offset, entry->size - entry_offset)) {
                 mutex_unlock(&dev->lock);
                 return -EFAULT;
@@ -94,6 +94,8 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     } else {
         bytes_copied = 0;
     }
+
+    PDEBUG("read finished with %zu bytes", bytes_copied);
 
     mutex_unlock(&dev->lock);
     return bytes_copied;
