@@ -96,3 +96,34 @@ void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer)
 {
     memset(buffer,0,sizeof(struct aesd_circular_buffer));
 }
+
+/**
+ * @param buffer the buffer to search for the next entry
+ * @param entry the current entry, or NULL to start at the beginning of the buffer
+ * @return the next entry in the buffer after @param entry, or the first entry if @param entry is NULL
+ */
+struct aesd_buffer_entry *aesd_circular_buffer_get_next_entry(struct aesd_circular_buffer *buffer, struct aesd_buffer_entry *entry)
+{
+    int index;
+    if (buffer == NULL)
+    {
+        return NULL;
+    }
+
+    if (entry == NULL)
+    {
+        index = buffer->out_offs;
+    }
+    else
+    {
+        index = 0;
+        while (index < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED && &buffer->entry[index] != entry)
+        {
+            index++;
+        }
+        if (index == AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) return NULL;
+        index = (index + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    }
+
+    return &buffer->entry[index];
+}

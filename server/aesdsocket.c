@@ -23,7 +23,9 @@ void handle_signal(int signal) {
         syslog(LOG_INFO, "Received signal %d", signal);
         printf("Received signal %d\n", signal);
 
+#if USE_AESD_CHAR_DEVICE != 1
         system("rm -f /var/tmp/aesdsocketdata");
+#endif
 
         pthread_mutex_destroy(&file_options.file_mutex);
 
@@ -201,6 +203,7 @@ void aesdsocket_create_socket() {
         daemon(0, 0);
     }
 
+#if USE_AESD_CHAR_DEVICE != 1
     // Create a thread to write the timestamp to the file
     if (pthread_create(&thread_id, NULL, (void *)timestamp, NULL) < 0) {
         perror("pthread_create");
@@ -208,6 +211,7 @@ void aesdsocket_create_socket() {
         closelog();
         exit(-1);
     }
+#endif
      
     // Listening for incoming connections
     if (listen(server_fd, 3) < 0) {
@@ -263,7 +267,9 @@ void aesdsocket_create_socket() {
     close(file_options.file_fd);
     closelog();
 
+#if USE_AESD_CHAR_DEVICE != 1
     system("rm -f /var/tmp/aesdsocketdata");
+#endif
 
     exit(0);
 }
@@ -279,7 +285,7 @@ int main(int argc, char *argv[]) {
     openlog("aesdsocket", LOG_PID | LOG_CONS, LOG_USER);
 
     // Open the file /var/tmp/aesdsocketdata for read/write
-    file_options.file_fd = open("/var/tmp/aesdsocketdata", O_RDWR | O_CREAT, 0644);
+    file_options.file_fd = open(AESD_CHAR_DEVICE_PATH, O_RDWR | O_CREAT, 0644);
     if (file_options.file_fd < 0) {
         perror("open failed");
         exit(-1);
