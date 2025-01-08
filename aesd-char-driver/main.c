@@ -71,10 +71,14 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         return -ERESTARTSYS;
     }
 
+    PDEBUG("2read %zu bytes with offset %lld",count,*f_pos);
+
     if (count == 0) {
         mutex_unlock(&dev->lock);
         return 0;
     }
+
+    PDEBUG("3read %zu bytes with offset %lld",count,*f_pos);
 
     // Find the buffer entry corresponding to the file position
     entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->buffer, *f_pos, &entry_offset);
