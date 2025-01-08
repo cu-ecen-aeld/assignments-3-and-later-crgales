@@ -67,6 +67,8 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     ssize_t bytes_copied = 0;
     ssize_t buffers_read = 0;
 
+    PDEBUG("1read %zu bytes with offset %lld",count,*f_pos);
+
     if (mutex_lock_interruptible(&dev->lock)) {
         PDEBUG("Can't get mutex");
         return -ERESTARTSYS;
