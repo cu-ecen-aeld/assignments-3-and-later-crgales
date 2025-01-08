@@ -160,8 +160,9 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
             return -ENOMEM;
         }
 
+        PDEBUG("Creating new entry buffer with size %zu", count);
         dev->new_entry->buffptr = kmalloc(count, GFP_KERNEL); // Allocate memory for the buffer
-        if (!entry->buffptr) {
+        if (!dev->new_entry->buffptr) {
             kfree(dev->new_entry);
             dev->new_entry = NULL;
             mutex_unlock(&dev->lock);
