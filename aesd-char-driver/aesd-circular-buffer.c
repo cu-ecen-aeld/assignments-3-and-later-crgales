@@ -65,6 +65,9 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 */
 void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
+    struct aesd_buffer_entry *entry;
+    int index;
+    
     if(buffer == NULL || add_entry == NULL)
     {
         return;
@@ -87,6 +90,12 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
     {
         buffer->full = false;
     }
+
+    buffer->total_size = 0;
+    AESD_CIRCULAR_BUFFER_FOREACH(entry,buffer,index) {
+        if (entry) buffer->total_size += entry->size;
+    }
+    
 }
 
 /**
