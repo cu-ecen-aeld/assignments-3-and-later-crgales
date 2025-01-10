@@ -249,7 +249,7 @@ loff_t aesd_adjust_file_offset(struct file *filp, uint32_t write_cmd, uint32_t w
 
     // Add up the sizes of the buffer entries until the write_cmd entry
     while (entry_index < write_cmd) {
-        entry = dev->buffer[(dev->buffer.out_offs+entry_index)%AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED];
+        entry = &dev->buffer.entry[(dev->buffer.out_offs+entry_index)%AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED];
         if (!entry) {
             return -EINVAL;
         }
@@ -258,7 +258,7 @@ loff_t aesd_adjust_file_offset(struct file *filp, uint32_t write_cmd, uint32_t w
     }
 
     // Add the write_cmd_offset to the new position
-    entry = dev->buffer[(dev->buffer.out_offs+write_cmd)%AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED];
+    entry = &dev->buffer.entry[(dev->buffer.out_offs+write_cmd)%AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED];
     if (entry && (write_cmd_offset <= entry->size)) {
         new_pos += write_cmd_offset;
     } else {
