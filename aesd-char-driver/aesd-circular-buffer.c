@@ -110,10 +110,12 @@ void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer)
  * @param buffer the buffer to search for the next entry
  * @param entry the current entry, or NULL to start at the beginning of the buffer
  * @return the next entry in the buffer after @param entry, or the first entry if @param entry is NULL
+ * or NULL if the buffer is empty or @param entry is the last entry in the buffer
  */
 struct aesd_buffer_entry *aesd_circular_buffer_get_next_entry(struct aesd_circular_buffer *buffer, struct aesd_buffer_entry *entry)
 {
     int index;
+    
     if (buffer == NULL)
     {
         return NULL;
@@ -130,8 +132,17 @@ struct aesd_buffer_entry *aesd_circular_buffer_get_next_entry(struct aesd_circul
         {
             index++;
         }
+    
+        // If we are at the end of the buffer, return NULL
         if (index == AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) return NULL;
+    
         index = (index + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+
+        // If we are at the in_offs, return NULL (as we have reached the end of the buffer)
+        if (index == buffer->in_offs)
+        {
+            return NULL;
+        }
     }
 
     return &buffer->entry[index];
