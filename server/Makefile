@@ -1,5 +1,5 @@
 CC ?= ${CROSS_COMPILE}gcc
-CFLAGS ?= -Wall -Wextra -O2 -g
+CFLAGS ?= -Wall -Wextra -O2 -g -I../aesd-char-driver
 LDFLAGS ?= -lpthread
 
 TARGET = aesdsocket

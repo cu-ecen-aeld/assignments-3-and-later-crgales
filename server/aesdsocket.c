@@ -11,6 +11,7 @@
 #include <pthread.h>
 
 #include "aesdsocket.h"
+#include "aesd_ioctl.h"
 
 aesdsocket_options_t options;
 file_options_t file_options;
@@ -106,6 +107,7 @@ void timestamp() {
 void handle_socket(void *arguments) {
     char buffer[BUFFER_SIZE];  // Allocate a thread-specific buffer
     int valread;
+    struct aesd_seekto seekto;
     socket_options_t *socket = (socket_options_t *)arguments;
 
     memset(buffer, 0, BUFFER_SIZE);
@@ -118,15 +120,26 @@ void handle_socket(void *arguments) {
             exit(-1);
         }
 
-        // Move the file pointer to the end of the file
-        lseek(file_options.file_fd, 0, SEEK_END);
+        // Check if the buffer contains the ioctl command
+        // If so, send the IOCTL command and read back from current file position
+        if (sscanf(buffer, "AESDCHAR_IOCSEEKTO:%d,%d", &seekto.write_cmd, &seekto.write_cmd_offset) == 2) {
+            // Perform the ioctl operation
+            if (ioctl(file_options.file_fd, AESDCHAR_IOCSEEKTO, &seekto) == -1) {
+                perror("ioctl");
+            }
+        }
+        // If no IOCTL command, then append to the end of the file and read back entire file
+        else {  
+            // Move the file pointer to the end of the file
+            lseek(file_options.file_fd, 0, SEEK_END);
 
-        // Writing data to the file
-        write(file_options.file_fd, buffer, strlen(buffer));
+            // Writing data to the file
+            write(file_options.file_fd, buffer, strlen(buffer));
 
-        // Rewind the file pointer to the beginning
-        lseek(file_options.file_fd, 0, SEEK_SET);
-
+            // Rewind the file pointer to the beginning
+            lseek(file_options.file_fd, 0, SEEK_SET);
+        }
+        
         // Clear the buffer
         memset(buffer, 0, BUFFER_SIZE);
         
