@@ -68,21 +68,15 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     ssize_t bytes_copied = 0;
     ssize_t buffers_read = 0;
 
-    PDEBUG("1read %zu bytes with offset %lld",count,*f_pos);
-
     if (mutex_lock_interruptible(&dev->lock)) {
         PDEBUG("Can't get mutex");
         return -ERESTARTSYS;
     }
 
-    PDEBUG("2read %zu bytes with offset %lld",count,*f_pos);
-
     if (count == 0) {
         mutex_unlock(&dev->lock);
         return 0;
     }
-
-    PDEBUG("3read %zu bytes with offset %lld",count,*f_pos);
 
     // Find the buffer entry corresponding to the file position
     entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->buffer, *f_pos, &entry_offset);
@@ -90,7 +84,6 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     // If the entry is NULL, it means that the file position is not available in the buffer
     if (entry) {
         while ((bytes_copied < count) && (buffers_read++ < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) && entry && entry->size) {
-            PDEBUG("So far read %zu bytes and %zu buffers",bytes_copied, buffers_read);
             if (copy_to_user(buf + bytes_copied, entry->buffptr + entry_offset, entry->size - entry_offset)) {
                 mutex_unlock(&dev->lock);
                 return -EFAULT;
@@ -135,7 +128,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     // If there is a new buffer entry, it means that the previous write didn't end in a new line
     // and the buffer entry was not added to the circular buffer, so we need to append the new data
     if (dev->new_entry) {
-        PDEBUG("Appending to previous entry");
         // Allocate memory for the new buffer entry which will contain the previous data and the new data
         tmp_data = kmalloc(dev->new_entry->size + count, GFP_KERNEL);
         if (!tmp_data) {
@@ -161,8 +153,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         dev->new_entry->size += count;
         dev->new_entry->buffptr = tmp_data;
     } else {
-        PDEBUG("Creating new entry");
-
         // Allocate memory for the new buffer entry
         dev->new_entry = kmalloc(sizeof(struct aesd_buffer_entry), GFP_KERNEL);
         if (!dev->new_entry) {
@@ -170,7 +160,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
             return -ENOMEM;
         }
 
-        PDEBUG("Creating new entry buffer with size %zu", count);
         dev->new_entry->buffptr = kmalloc(count, GFP_KERNEL); // Allocate memory for the buffer
         if (!dev->new_entry->buffptr) {
             kfree(dev->new_entry);
@@ -179,7 +168,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
             return -ENOMEM;
         }
 
-        PDEBUG("Copying data to new entry from user space");
         bytes_not_copied = copy_from_user(dev->new_entry->buffptr, buf, count);
         if (bytes_not_copied) {
             kfree(dev->new_entry->buffptr);
@@ -191,11 +179,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         dev->new_entry->size = count;
     }
 
-    PDEBUG("Checking if the last character is a new line");
-
     // We now have a new buffer entry, so we need to add it to the circular buffer if the last character is a new line
     if (dev->new_entry->buffptr[dev->new_entry->size - 1] == '\n') {
-        PDEBUG("Moving new entry to circular buffer");
         aesd_circular_buffer_add_entry(&dev->buffer, dev->new_entry);
         dev->new_entry = NULL;
     }
@@ -211,18 +196,22 @@ loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
     loff_t new_pos = 0;
     struct aesd_dev *dev = filp->private_data;
 
+
     if (mutex_lock_interruptible(&dev->lock)) {
         return -ERESTARTSYS;
     }
 
     switch (whence) {
         case SEEK_SET:
+            PDEBUG("llseek SEEK_SET %lld bytes with offset %lld",off,filp->f_pos);
             new_pos = off;
             break;
         case SEEK_CUR:
+            PDEBUG("llseek SEEK_CUR %lld bytes with offset %lld",off,filp->f_pos);
             new_pos = filp->f_pos + off;
             break;
         case SEEK_END:
+            PDEBUG("llseek SEEK_END %lld bytes with offset %lld",off,filp->f_pos);
             new_pos = dev->buffer.total_size + off;
             break;
         default:
@@ -235,6 +224,7 @@ loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
         return -EINVAL;
     }
 
+    PDEBUG("llseek new position %lld",new_pos);
     filp->f_pos = new_pos;
     mutex_unlock(&dev->lock);
     return new_pos;
@@ -247,23 +237,30 @@ loff_t aesd_adjust_file_offset(struct file *filp, uint32_t write_cmd, uint32_t w
     size_t entry_index = 0;
     loff_t new_pos = 0;
 
+    PDEBUG("Adjusting file offset to write_cmd %d and write_cmd_offset %d", write_cmd, write_cmd_offset);
+
     // Add up the sizes of the buffer entries until the write_cmd entry
     while (entry_index < write_cmd) {
         entry = &dev->buffer.entry[(dev->buffer.out_offs+entry_index)%AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED];
         if (!entry) {
             return -EINVAL;
         }
+        PDEBUG("Entry %d has size %zu", entry_index, entry->size);
         new_pos += entry->size;
         entry_index++;
     }
 
-    // Add the write_cmd_offset to the new position
+     // Add the write_cmd_offset to the new position
     entry = &dev->buffer.entry[(dev->buffer.out_offs+write_cmd)%AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED];
+    PDEBUG("Reached entry %d. new_pos has a total of %lld bytes. Entry has size of %lld", entry_index, new_pos, entry->size);
+
     if (entry && (write_cmd_offset <= entry->size)) {
         new_pos += write_cmd_offset;
     } else {
         return -EINVAL;
     }
+
+    PDEBUG("Final position is %lld", new_pos);
 
     filp->f_pos = new_pos;
 
@@ -295,6 +292,8 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
                 retval = -EINVAL;
                 break;
             }
+
+            PDEBUG("IOCTL Seeking to write_cmd %d and write_cmd_offset %d", seekto.write_cmd, seekto.write_cmd_offset);
 
             retval = aesd_adjust_file_offset(filp, seekto.write_cmd, seekto.write_cmd_offset);
             mutex_unlock(&dev->lock);
