@@ -77,6 +77,14 @@ void timestamp() {
     char buffer[BUFFER_SIZE];
     time_t rawtime;
     struct tm *timeinfo;
+    int file_fd;
+
+    // Open the file /var/tmp/aesdsocketdata for read/write
+    file_fd = open(AESD_CHAR_DEVICE_PATH, O_RDWR | O_CREAT, 0644);
+    if (file_fd < 0) {
+        perror("open failed");
+        exit(-1);
+    }
 
     while (1) {
         // Acquire the mutex before accessing the file
@@ -90,9 +98,9 @@ void timestamp() {
         strftime(buffer, BUFFER_SIZE, "timestamp:%Y-%m-%d %H:%M:%S\n", timeinfo);
 
         // Move the file pointer to the end of the file
-        lseek(file_options.file_fd, 0, SEEK_END);
+        lseek(file_fd, 0, SEEK_END);
 
-        write(file_options.file_fd, buffer, strlen(buffer));
+        write(file_fd, buffer, strlen(buffer));
         
         // Release the mutex after accessing the file
         if (pthread_mutex_unlock(&file_options.file_mutex)) {
@@ -106,11 +114,19 @@ void timestamp() {
 
 void handle_socket(void *arguments) {
     char buffer[BUFFER_SIZE];  // Allocate a thread-specific buffer
-    int valread;
+    int valread, file_fd;
     struct aesd_seekto seekto;
     socket_options_t *socket = (socket_options_t *)arguments;
 
+    // Open the file /var/tmp/aesdsocketdata for read/write
+    file_fd = open(AESD_CHAR_DEVICE_PATH, O_RDWR | O_CREAT, 0644);
+    if (file_fd < 0) {
+        perror("open failed");
+        exit(-1);
+    }
+
     memset(buffer, 0, BUFFER_SIZE);
+
     // Reading data from the client
     while ((valread = read(socket->socket_fd, buffer, BUFFER_SIZE)) > 0) {
 
@@ -124,27 +140,27 @@ void handle_socket(void *arguments) {
         // If so, send the IOCTL command and read back from current file position
         if (sscanf(buffer, "AESDCHAR_IOCSEEKTO:%d,%d", &seekto.write_cmd, &seekto.write_cmd_offset) == 2) {
             // Perform the ioctl operation
-            if (ioctl(file_options.file_fd, AESDCHAR_IOCSEEKTO, &seekto) == -1) {
+            if (ioctl(file_fd, AESDCHAR_IOCSEEKTO, &seekto) == -1) {
                 perror("ioctl");
             }
         }
         // If no IOCTL command, then append to the end of the file and read back entire file
         else {  
             // Move the file pointer to the end of the file
-            lseek(file_options.file_fd, 0, SEEK_END);
+            lseek(file_fd, 0, SEEK_END);
 
             // Writing data to the file
-            write(file_options.file_fd, buffer, strlen(buffer));
+            write(file_fd, buffer, strlen(buffer));
 
             // Rewind the file pointer to the beginning
-            lseek(file_options.file_fd, 0, SEEK_SET);
+            lseek(file_fd, 0, SEEK_SET);
         }
         
         // Clear the buffer
         memset(buffer, 0, BUFFER_SIZE);
         
         // Reading data from the file
-        read(file_options.file_fd, buffer, BUFFER_SIZE);
+        read(file_fd, buffer, BUFFER_SIZE);
 
         // Sending buffer to the client
         send(socket->socket_fd, buffer, strlen(buffer), 0);
@@ -166,6 +182,7 @@ void handle_socket(void *arguments) {
 
     // Close the socket and free the memory
     close(socket->socket_fd);
+    close(file_fd);
     free(socket);
     socket = NULL;
 
@@ -252,7 +269,6 @@ void aesdsocket_create_socket() {
             perror("pthread_create");
             close(accept_fd);
             close(server_fd);
-            close(file_options.file_fd);
             closelog();
             exit(-1);
         }
@@ -263,7 +279,6 @@ void aesdsocket_create_socket() {
             perror("malloc");
             close(accept_fd);
             close(server_fd);
-            close(file_options.file_fd);
             closelog();
             exit(-1);
         }
@@ -277,7 +292,6 @@ void aesdsocket_create_socket() {
     // Closing the socket
     close(accept_fd);
     close(server_fd);
-    close(file_options.file_fd);
     closelog();
 
 #if USE_AESD_CHAR_DEVICE != 1
@@ -297,17 +311,9 @@ int main(int argc, char *argv[]) {
 
     openlog("aesdsocket", LOG_PID | LOG_CONS, LOG_USER);
 
-    // Open the file /var/tmp/aesdsocketdata for read/write
-    file_options.file_fd = open(AESD_CHAR_DEVICE_PATH, O_RDWR | O_CREAT, 0644);
-    if (file_options.file_fd < 0) {
-        perror("open failed");
-        exit(-1);
-    }
-
     // Initialize the mutex
     if (pthread_mutex_init(&file_options.file_mutex, NULL) != 0) {
         perror("pthread_mutex_init");
-        close(file_options.file_fd);
         closelog();
         exit(-1);
     }

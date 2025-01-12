@@ -23,7 +23,6 @@ typedef struct {
 } socket_options_t;
 
 typedef struct {
-    int file_fd;
     pthread_mutex_t file_mutex;
 } file_options_t;
 
