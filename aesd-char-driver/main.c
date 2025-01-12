@@ -63,7 +63,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
      * TODO: handle read
      */
     struct aesd_dev *dev = filp->private_data;
-    struct aesd_buffer_entry *entry;
+    struct aesd_buffer_entry *entry, *first_entry;
     ssize_t entry_offset = 0;
     ssize_t bytes_copied = 0;
     ssize_t buffers_read = 0;
@@ -79,7 +79,8 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     }
 
     // Find the buffer entry corresponding to the file position
-    entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->buffer, *f_pos, &entry_offset);
+    first_entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->buffer, *f_pos, &entry_offset);
+    entry = first_entry;
 
     // If the entry is NULL, it means that the file position is not available in the buffer
     if (entry) {
@@ -92,6 +93,9 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
             entry_offset = 0;
 
             entry = aesd_circular_buffer_get_next_entry(&dev->buffer, entry);
+            if (entry == first_entry) {
+                break;
+            }
         }
     } else {
         bytes_copied = 0;
