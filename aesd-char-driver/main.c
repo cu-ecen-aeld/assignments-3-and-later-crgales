@@ -99,6 +99,9 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
     PDEBUG("read finished with %zu bytes", bytes_copied);
 
     mutex_unlock(&dev->lock);
+
+    *f_pos += bytes_copied;
+
     return bytes_copied;
 }
 
