@@ -54,10 +54,8 @@ int aesd_release(struct inode *inode, struct file *filp)
     return 0;
 }
 
-ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
-                loff_t *f_pos)
+ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
-
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
     /**
      * TODO: handle read
@@ -93,9 +91,6 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
             entry_offset = 0;
 
             entry = aesd_circular_buffer_get_next_entry(&dev->buffer, entry);
-            if (entry == first_entry) {
-                break;
-            }
         }
     } else {
         bytes_copied = 0;
